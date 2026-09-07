@@ -1,0 +1,48 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
+df = pd.read_csv("data/sales_data.csv")
+print("Shape:", df.shape)
+print("\nData types:\n", df.dtypes)
+print("\nMissing values:\n", df.isnull().sum())
+print("\nDuplicates:", df.duplicated().sum())
+print("\nStatistics:\n", df.describe(include="all"))
+
+df = df.drop_duplicates()
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+for c in ["Units_Sold","Unit_Price","Revenue","Customer_Rating"]:
+    df[c] = pd.to_numeric(df[c], errors="coerce")
+
+product_revenue = df.groupby("Product")["Revenue"].sum().sort_values(ascending=False)
+region_revenue = df.groupby("Region")["Revenue"].sum().sort_values(ascending=False)
+monthly = df.groupby(df["Date"].dt.to_period("M"))["Revenue"].sum()
+
+print("\nRevenue by product:\n", product_revenue)
+print("\nRevenue by region:\n", region_revenue)
+print("\nMonthly revenue:\n", monthly)
+
+q1,q3=df["Revenue"].quantile([.25,.75])
+iqr=q3-q1
+anomalies=df[(df["Revenue"]<q1-1.5*iqr)|(df["Revenue"]>q3+1.5*iqr)]
+print("\nPotential anomalies:\n", anomalies)
+
+os.makedirs("output",exist_ok=True)
+df.to_csv("output/cleaned_sales_data.csv",index=False)
+
+product_revenue.plot(kind="bar",title="Revenue by Product",ylabel="Revenue")
+plt.tight_layout(); plt.savefig("output/revenue_by_product.png"); plt.close()
+
+region_revenue.plot(kind="bar",title="Revenue by Region",ylabel="Revenue")
+plt.tight_layout(); plt.savefig("output/revenue_by_region.png"); plt.close()
+
+monthly.astype(float).plot(marker="o",title="Monthly Revenue Trend",ylabel="Revenue")
+plt.tight_layout(); plt.savefig("output/monthly_revenue_trend.png"); plt.close()
+
+with open("output/eda_summary.txt","w") as f:
+    f.write(f"Rows after cleaning: {len(df)}\n")
+    f.write(f"Total revenue: {df.Revenue.sum():.2f}\n")
+    f.write(f"Highest revenue product: {product_revenue.index[0]}\n")
+    f.write(f"Highest revenue region: {region_revenue.index[0]}\n")
+    f.write(f"Potential anomalies: {len(anomalies)}\n")
+print("\nEDA completed. Check output/.")
